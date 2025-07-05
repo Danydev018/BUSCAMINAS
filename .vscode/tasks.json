@@ -1,0 +1,18 @@
+{
+    "version":"2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Compilar Buscaminas",
+            "command": "g++",
+            "args": [
+                "-std=c++11",
+                "-pthread",
+                "-I", "${workspaceFolder}/include",
+                "${workspaceFolder}/src/*.cpp",
+                "-o", "${workspaceFolder}/bin/buscaminas"
+            ],
+            "group": "build"
+        }
+    ]
+}
