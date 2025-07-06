@@ -148,8 +148,9 @@ void TableroJuego::imprimirTablero() const {
     limpiarPantalla();
     // Colores ANSI y emojis para consola
     int baseX = 8, baseY = 2;
-    int ancho = columnas * 3 + 9; // +9 para marco y numeración
-    int alto = filas + 7;
+    int cellW = 5, cellH = 1; // cada celda mide 5x1 para centrar emojis y evitar distorsión
+    int ancho = columnas * cellW + 1;
+    int alto = filas * cellH + 1;
     const char* RESET = "\033[0m";
     const char* GRIS = "\033[90m";
     const char* ROJO = "\033[91m";
@@ -160,29 +161,60 @@ void TableroJuego::imprimirTablero() const {
     const char* BLANCO = "\033[97m";
 
     std::string emoji_bomba = "\xF0\x9F\x92\xA3"; // 💣
-    std::string emoji_bandera = "\xF0\x9F\x9A\xA9"; // 🚩 (bandera roja)
-    std::string emoji_oculto = "■"; // Mejor visibilidad en consola
+    std::string emoji_bandera = "\xF0\x9F\x9A\xA9"; // 🚩
+    std::string emoji_oculto = "■";
+
+    // Imprimir encabezado de columnas
+    gotoxy(baseX + 4, baseY);
+    std::cout << "   ";
+    for (int c = 0; c < columnas; ++c) {
+        std::string colStr = std::to_string(c);
+        int pad = cellW - colStr.length();
+        int left = pad / 2, right = pad - left;
+        std::cout << std::string(left, ' ') << colStr << std::string(right, ' ');
+    }
 
     // Marco superior
-    gotoxy(baseX, baseY);
-    std::cout << "┌"; for(int i=0; i<ancho-2; ++i) std::cout << "─"; std::cout << "┐\n";
-    // Encabezado columnas alineado
-    std::string encabezado = "   ";
-    for(int c = 0; c < columnas; c++) encabezado += (c < 10 ? " " : "") + std::to_string(c) + " ";
-    printBoardLine(baseX, baseY+1, encabezado, ancho);
-    // Separador
-    std::string sep = "   +";
-    for(int c = 0; c < columnas; c++) sep += "---";
-    sep += "+";
-    printBoardLine(baseX, baseY+2, sep, ancho);
-    // Filas del tablero
-    for(int f = 0; f < filas; f++) {
-        std::string fila = (f < 10 ? " " : "") + std::to_string(f) + " |";
-        for(int c = 0; c < columnas; c++) {
+    gotoxy(baseX, baseY+1);
+    std::cout << "   ┌";
+    for (int c = 0; c < columnas-1; ++c) {
+        for (int i = 0; i < cellW; ++i) std::cout << "─";
+        std::cout << "┬";
+    }
+    for (int i = 0; i < cellW; ++i) std::cout << "─";
+    std::cout << "┐";
+
+    // Imprimir solo el marco y los separadores de las filas
+    for (int f = 0; f < filas; ++f) {
+        // Número de fila y marco izquierdo
+        gotoxy(baseX, baseY+2+f*2);
+        std::cout << (f < 10 ? " " : "") << f << " │";
+        // Imprimir solo los separadores de celdas
+        for (int c = 0; c < columnas; ++c) {
+            for (int i = 0; i < cellW; ++i) std::cout << " ";
+            std::cout << "│";
+        }
+        // Línea separadora (excepto la última)
+        if (f < filas-1) {
+            gotoxy(baseX, baseY+3+f*2);
+            std::cout << "   ├";
+            for (int c = 0; c < columnas-1; ++c) {
+                for (int i = 0; i < cellW; ++i) std::cout << "─";
+                std::cout << "┼";
+            }
+            for (int i = 0; i < cellW; ++i) std::cout << "─";
+            std::cout << "┤";
+        }
+    }
+
+    // Imprimir el contenido de cada casilla centrado, encima del marco
+    for (int f = 0; f < filas; ++f) {
+        for (int c = 0; c < columnas; ++c) {
             char celda = tableroVisible[f][c];
-            if(celda == '-') fila += GRIS + std::string(" ") + emoji_oculto + " " + RESET;
-            else if(celda == 'F') fila += ROJO + std::string(" ") + emoji_bandera + " " + RESET;
-            else if(celda == 'X' || celda == '*') fila += ROJO + std::string(" ") + emoji_bomba + " " + RESET;
+            std::string contenido;
+            if(celda == '-') contenido = GRIS + emoji_oculto + RESET;
+            else if(celda == 'F') contenido = ROJO + emoji_bandera + RESET;
+            else if(celda == 'X' || celda == '*') contenido = ROJO + emoji_bomba + RESET;
             else if(celda >= '1' && celda <= '8') {
                 const char* color = BLANCO;
                 if(celda == '1') color = AZUL;
@@ -193,18 +225,40 @@ void TableroJuego::imprimirTablero() const {
                 else if(celda == '6') color = GRIS;
                 else if(celda == '7') color = BLANCO;
                 else if(celda == '8') color = BLANCO;
-                fila += std::string(color) + " " + celda + " " + RESET;
-            } else if(celda == '0' || celda == ' ') fila += "   ";
-            else fila += BLANCO + std::string(" ") + celda + " " + RESET;
+                contenido = std::string(color) + celda + RESET;
+            } else if(celda == '0' || celda == ' ') contenido = " ";
+            else contenido = BLANCO + std::string(1, celda) + RESET;
+            // Calcular posición centrada en la casilla
+            int cellX = baseX + 4 + c * (cellW + 1); // +4 por el número de fila y marco
+            int cellY = baseY + 2 + f * 2;
+            int left = cellW / 2;
+            gotoxy(cellX + left, cellY);
+            std::cout << contenido;
         }
-        fila += "|";
-        printBoardLine(baseX, baseY+3+f, fila, ancho);
     }
-    // Separador inferior
-    printBoardLine(baseX, baseY+3+filas, sep, ancho);
+    // Marco inferior
+    gotoxy(baseX, baseY+1+filas*2);
+    std::cout << "   └";
+    for (int c = 0; c < columnas-1; ++c) {
+        for (int i = 0; i < cellW; ++i) std::cout << "─";
+        std::cout << "┴";
+    }
+    for (int i = 0; i < cellW; ++i) std::cout << "─";
+    std::cout << "┘";
+
     // Info debajo del tablero
-    printBoardLine(baseX, baseY+4+filas, "Minas: " + std::to_string(minas) + "  Banderas: " + std::to_string(banderasColocadas) + "  Destapadas: " + std::to_string(celdasDestapadas) + "  Tiempo: " + std::to_string((int)obtenerTiempoTranscurrido()) + "s", ancho);
-    printBoardLine(baseX, baseY+5+filas, "Leyenda: " + std::string(GRIS) + emoji_oculto + RESET + "=Oculto  " + ROJO + emoji_bandera + RESET + "=Bandera  " + ROJO + emoji_bomba + RESET + "=Mina", ancho);
+    gotoxy(baseX, baseY+3+filas*2);
+    std::cout << "Minas: " << minas << "  Banderas: " << banderasColocadas << "  Destapadas: " << celdasDestapadas << "  Tiempo: " << (int)obtenerTiempoTranscurrido() << "s";
+    gotoxy(baseX, baseY+4+filas*2);
+    std::cout << "Leyenda: " << GRIS << emoji_oculto << RESET << "=Oculto  " << ROJO << emoji_bandera << RESET << "=Bandera  " << ROJO << emoji_bomba << RESET << "=Mina";
+    // Deja espacio para el recuadro de entrada
+    gotoxy(baseX, baseY+6+filas*2);
+    std::cout << std::string(ancho+10, ' ');
+
+    // Sugerencia de uso para el recuadro de entrada:
+    // #include "../include/UtilsExtra.hpp"
+    // imprimirRecuadroEntrada(baseX, baseY+6+filas*2, ancho, "Ingrese fila, columna y acción (D/B): ");
+    // limpiarZonaEntrada(baseX, baseY+6+filas*2, ancho); // para limpiar antes de mostrar otro recuadro
 }
 
 bool TableroJuego::esJuegoTerminado() const {

@@ -313,44 +313,29 @@ void jugarIndividual(TableroJuego::Dificultad diff, int filasPersonalizadas, int
     Jugador jugador(nombre);
     jugador.iniciarJuego(diff, filasPersonalizadas, columnasPersonalizadas, minasPersonalizadas);
 
+    #include "UtilsExtra.hpp"
     while(jugador.estaVivo() && !jugador.haGanado()){
         jugador.obtenerTablero().imprimirTablero();
-        // Recuadro alineado para ingresar fila
-        int baseInputX = 18, baseInputY = 8;
-        const int anchoInput = 28;
-        std::cout << "\033[96m";
-        gotoxy(baseInputX, baseInputY);
-        std::cout << "┌"; for(int i=0; i<anchoInput-2; ++i) std::cout << "─"; std::cout << "┐\n";
-        printMenuLine(baseInputX, baseInputY+1, "Ingrese Fila:", anchoInput);
-        printMenuLine(baseInputX, baseInputY+2, "", anchoInput);
-        gotoxy(baseInputX, baseInputY+3);
-        std::cout << "└"; for(int i=0; i<anchoInput-2; ++i) std::cout << "─"; std::cout << "┘\n";
+        int baseInputX = 8; // igual que baseX del tablero
+        int baseInputY = 6 + jugador.obtenerTablero().obtenerFilas()*2 + 2; // debajo de la leyenda
+        int anchoInput = jugador.obtenerTablero().obtenerColumnas()*5 + 1;
+
+        // Limpiar y mostrar recuadro para fila
+        limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
+        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "Ingrese Fila:");
         gotoxy(baseInputX+2, baseInputY+2);
-        std::cout << "\033[0m";
         int fila = obtenerEntrada("", 0, jugador.obtenerTablero().obtenerFilas()-1);
 
-        // Recuadro alineado para ingresar columna
-        std::cout << "\033[96m";
-        gotoxy(baseInputX, baseInputY+5);
-        std::cout << "┌"; for(int i=0; i<anchoInput-2; ++i) std::cout << "─"; std::cout << "┐\n";
-        printMenuLine(baseInputX, baseInputY+6, "Ingrese Columna:", anchoInput);
-        printMenuLine(baseInputX, baseInputY+7, "", anchoInput);
-        gotoxy(baseInputX, baseInputY+8);
-        std::cout << "└"; for(int i=0; i<anchoInput-2; ++i) std::cout << "─"; std::cout << "┘\n";
-        gotoxy(baseInputX+2, baseInputY+7);
-        std::cout << "\033[0m";
+        // Limpiar y mostrar recuadro para columna
+        limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
+        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "Ingrese Columna:");
+        gotoxy(baseInputX+2, baseInputY+2);
         int columna = obtenerEntrada("", 0, jugador.obtenerTablero().obtenerColumnas()-1);
 
-        // Recuadro alineado para acción
-        std::cout << "\033[96m";
-        gotoxy(baseInputX, baseInputY+10);
-        std::cout << "┌"; for(int i=0; i<anchoInput-2; ++i) std::cout << "─"; std::cout << "┐\n";
-        printMenuLine(baseInputX, baseInputY+11, "[D]estapar o [B]andera?", anchoInput);
-        printMenuLine(baseInputX, baseInputY+12, "", anchoInput);
-        gotoxy(baseInputX, baseInputY+13);
-        std::cout << "└"; for(int i=0; i<anchoInput-2; ++i) std::cout << "─"; std::cout << "┘\n";
-        gotoxy(baseInputX+2, baseInputY+12);
-        std::cout << "\033[0m";
+        // Limpiar y mostrar recuadro para acción
+        limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
+        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "[D]estapar o [B]andera?");
+        gotoxy(baseInputX+2, baseInputY+2);
         char accion;
         std::cin >> accion;
         if(accion == 'B' || accion == 'b'){
@@ -358,6 +343,7 @@ void jugarIndividual(TableroJuego::Dificultad diff, int filasPersonalizadas, int
         }else{
             jugador.realizarMovimiento(fila, columna);
         }
+        limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
     }
 
     //Guardar record
