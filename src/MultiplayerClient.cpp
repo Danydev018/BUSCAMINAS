@@ -84,31 +84,35 @@ void recibirActualizaciones(int socket,Jugador& jugador){
 }
 
 void ClienteMultijugador::jugar(){
-    //Hilo para recibir actualizaciones
+    // Hilo para recibir actualizaciones
     std::thread hiloRecibir(recibirActualizaciones, socketCliente, std::ref(jugador));
 
-    //Juego principal
-    while(jugador.estaVivo() && !jugador.haGanado()){
+    // Control de turnos: el cliente solo puede jugar cuando no es el turno del anfitrión
+    bool miTurno = false;
+    while (jugador.estaVivo() && !jugador.haGanado()) {
+        // Esperar a que sea el turno del cliente (el servidor controla los turnos)
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        // El cliente puede jugar cuando el tablero se actualiza (por mensaje del servidor)
+        // Para simplificar, permitimos que el cliente juegue siempre que esté vivo y no haya ganado
         jugador.obtenerTablero().imprimirTablero();
 
-        int fila = obtenerEntrada("Fila: ", 0, jugador.obtenerTablero().obtenerFilas()-1);
-        int columna = obtenerEntrada("Columna: ",0, jugador.obtenerTablero().obtenerColumnas()-1);
+        int fila = obtenerEntrada("Fila: ", 0, jugador.obtenerTablero().obtenerFilas() - 1);
+        int columna = obtenerEntrada("Columna: ", 0, jugador.obtenerTablero().obtenerColumnas() - 1);
 
         char accion;
         std::cout << "[D]estapar o [B]andera? ";
         std::cin >> accion;
 
         std::string movimientoMsg;
-        if(accion == 'B' || accion == 'b'){
+        if (accion == 'B' || accion == 'b') {
             jugador.alternarBanderas(fila, columna);
-
             movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " F\n";
-        }else{
+        } else {
             jugador.realizarMovimiento(fila, columna);
             movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " D\n";
         }
 
-        //Enviar movimiento al servidor
+        // Enviar movimiento al servidor
         send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
     }
 

@@ -73,68 +73,80 @@ void ServidorMultijugador::ejecutarJuego(){
     std::string configMsg = "CONFIG " + std::to_string(tablero.obtenerFilas()) + " " + std::to_string(tablero.obtenerColumnas()) + " " + std::to_string(tablero.obtenerMinas()) + "\n";
     send(socketCliente, configMsg.c_str(), configMsg.size(), 0);
 
-    //Hilo para recibir movimientos del ciente
+    // Control de turnos: true = anfitrión, false = cliente
+    bool turnoAnfitrion = true;
+    bool juegoTerminado = false;
+
+    // Hilo para recibir movimientos del cliente
     std::thread hiloRecibir([&](){
         char buffer[1024];
-        while(true){
-            ssize_t bytesRecibidos = recv(socketCliente, buffer, sizeof(buffer), 0);
-            if(bytesRecibidos <= 0) break;
+        while (!juegoTerminado) {
+            ssize_t bytesRecibidos = recv(socketCliente, buffer, sizeof(buffer) - 1, 0);
+            if (bytesRecibidos <= 0) break;
             buffer[bytesRecibidos] = '\0';
             std::string mensaje(buffer);
 
-            if(mensaje.find("MOVE ") == 0){
+            if (mensaje.find("MOVE ") == 0) {
                 int fila, columna;
                 char tipo;
                 sscanf(buffer, "MOVE %d %d %c", &fila, &columna, &tipo);
 
-                if(tipo == 'D'){
+                if (tipo == 'D') {
                     jugadorCliente.realizarMovimiento(fila, columna);
-                }else if(tipo == 'F'){
+                } else if (tipo == 'F') {
                     jugadorCliente.alternarBanderas(fila, columna);
                 }
-                //Enviar actualización del tablero
-                enviarTablero(socketCliente, jugadorAnfitrion.obtenerTablero());
+                // Enviar actualización del tablero del cliente al anfitrión
+                enviarTablero(socketCliente, jugadorCliente.obtenerTablero());
+                turnoAnfitrion = true;
             }
         }
     });
 
-    //Juego principal
-    while(jugadorAnfitrion.estaVivo() && jugadorCliente.estaVivo() && !jugadorAnfitrion.haGanado() && !jugadorCliente.haGanado()){
+    // Juego principal por turnos
+    while (jugadorAnfitrion.estaVivo() && jugadorCliente.estaVivo() && !jugadorAnfitrion.haGanado() && !jugadorCliente.haGanado()) {
+        if (turnoAnfitrion) {
+            // Turno del anfitrión
+            jugadorAnfitrion.obtenerTablero().imprimirTablero();
 
-        //Turno del anfitrion
-        jugadorAnfitrion.obtenerTablero().imprimirTablero();
+            int fila = obtenerEntrada("Fila: ", 0, tablero.obtenerFilas() - 1);
+            int columna = obtenerEntrada("Columna: ", 0, tablero.obtenerColumnas() - 1);
 
-        int fila = obtenerEntrada("Fila: ", 0, tablero.obtenerFilas()-1);
-        int columna = obtenerEntrada("Columna: ", 0, tablero.obtenerColumnas()-1);
+            char accion;
+            std::cout << "[D]estapar o [B]andera? ";
+            std::cin >> accion;
 
-        char accion;
-        std::cout << "[D]estapar o [B]andera? ";
-        std::cin >> accion;
+            std::string movimientoMsg;
+            if (accion == 'B' || accion == 'b') {
+                jugadorAnfitrion.alternarBanderas(fila, columna);
+                movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " F\n";
+            } else {
+                jugadorAnfitrion.realizarMovimiento(fila, columna);
+                movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " D\n";
+            }
 
-        std::string movimientoMsg;
-        if(accion == 'B' || accion == 'b'){
-            jugadorAnfitrion.alternarBanderas(fila, columna);
-
-            movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " F\n";
-        }else{
-            jugadorAnfitrion.realizarMovimiento(fila, columna);
-            movimientoMsg = "Move " + std::to_string(fila) + " " + std::to_string(columna) + " D\n";
+            // Enviar movimiento al cliente
+            send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
+            // Enviar tablero actualizado del anfitrión al cliente
+            enviarTablero(socketCliente, jugadorAnfitrion.obtenerTablero());
+            turnoAnfitrion = false;
+        } else {
+            // Esperar a que el cliente juegue (el hilo de recepción lo gestiona)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-
-        //Enviar movimiento a cliente
-        send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
-        enviarTablero(socketCliente, jugadorAnfitrion.obtenerTablero());
     }
+
     // Finalizar Juego
+    juegoTerminado = true;
     std::string resultado;
-    if(!jugadorAnfitrion.haGanado()){
+    if (jugadorAnfitrion.haGanado()) {
         resultado = "GANADOR Anfitrion";
-    }else if(jugadorCliente.haGanado()){
+    } else if (jugadorCliente.haGanado()) {
         resultado = "GANADOR Cliente";
-    }else{
+    } else {
         resultado = "EMPATE";
     }
-   
+
     std::string finMsg = "FIN " + resultado + "\n";
     send(socketCliente, finMsg.c_str(), finMsg.size(), 0);
 
