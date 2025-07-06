@@ -164,14 +164,13 @@ void TableroJuego::imprimirTablero() const {
     std::string emoji_bandera = "\xF0\x9F\x9A\xA9"; // 🚩
     std::string emoji_oculto = "■";
 
-    // Imprimir encabezado de columnas
-    gotoxy(baseX + 4, baseY);
-    std::cout << "   ";
+    // Imprimir encabezado de columnas centrado en cada casilla
     for (int c = 0; c < columnas; ++c) {
         std::string colStr = std::to_string(c);
-        int pad = cellW - colStr.length();
-        int left = pad / 2, right = pad - left;
-        std::cout << std::string(left, ' ') << colStr << std::string(right, ' ');
+        int colX = baseX + 4 + c * (cellW + 1) + cellW / 2 - (int)colStr.length() / 2;
+        int colY = baseY;
+        gotoxy(colX, colY);
+        std::cout << colStr;
     }
 
     // Marco superior

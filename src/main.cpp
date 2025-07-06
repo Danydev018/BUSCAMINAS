@@ -320,22 +320,15 @@ void jugarIndividual(TableroJuego::Dificultad diff, int filasPersonalizadas, int
         int baseInputY = 6 + jugador.obtenerTablero().obtenerFilas()*2 + 2; // debajo de la leyenda
         int anchoInput = jugador.obtenerTablero().obtenerColumnas()*5 + 1;
 
-        // Limpiar y mostrar recuadro para fila
+        // Limpiar y mostrar recuadro para fila y columna juntos
         limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
-        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "Ingrese Fila:");
-        gotoxy(baseInputX+2, baseInputY+2);
-        int fila = obtenerEntrada("", 0, jugador.obtenerTablero().obtenerFilas()-1);
-
-        // Limpiar y mostrar recuadro para columna
-        limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
-        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "Ingrese Columna:");
-        gotoxy(baseInputX+2, baseInputY+2);
-        int columna = obtenerEntrada("", 0, jugador.obtenerTablero().obtenerColumnas()-1);
+        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "Ingrese fila y columna: ");
+        int fila, columna;
+        std::cin >> fila >> columna;
 
         // Limpiar y mostrar recuadro para acción
         limpiarZonaEntrada(baseInputX, baseInputY, anchoInput);
-        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "[D]estapar o [B]andera?");
-        gotoxy(baseInputX+2, baseInputY+2);
+        imprimirRecuadroEntrada(baseInputX, baseInputY, anchoInput, "[D]estapar o [B]andera?: ");
         char accion;
         std::cin >> accion;
         if(accion == 'B' || accion == 'b'){
