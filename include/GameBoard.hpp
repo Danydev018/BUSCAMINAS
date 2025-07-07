@@ -6,7 +6,6 @@
 #include <string>
 
 class TableroJuego {
-private:
 public:
     enum Dificultad {
         PRINCIPIANTE,
@@ -32,7 +31,6 @@ private:
     time_t tiempoFin;
 
 public:
-
     TableroJuego(Dificultad diff, int filasPersonalizadas = 8, int columnasPersonalizadas = 8, int minasPersonalizadas = 10);
     void inicializar();
     bool destapar(int fila, int columna);
@@ -52,6 +50,10 @@ public:
     std::vector<std::vector<char>>& obtenerTableroVisible() { return tableroVisible; }
     const std::vector<std::vector<char>>& obtenerTableroVisible() const { return tableroVisible; }
 
+    // Permite inicializar el tablero de minas desde una matriz externa (para multijugador)
+    void setTableroMinas(const std::vector<std::vector<bool>>& minasExternas);
+    // Permite obtener la matriz de minas (para enviar al cliente)
+    const std::vector<std::vector<bool>>& getTableroMinas() const;
 };
 
 #endif

@@ -72,6 +72,16 @@ void ServidorMultijugador::ejecutarJuego(){
     TableroJuego& tablero = jugadorAnfitrion.obtenerTablero();
     std::string configMsg = "CONFIG " + std::to_string(tablero.obtenerFilas()) + " " + std::to_string(tablero.obtenerColumnas()) + " " + std::to_string(tablero.obtenerMinas()) + "\n";
     send(socketCliente, configMsg.c_str(), configMsg.size(), 0);
+    // Enviar la matriz de minas al cliente (serializada)
+    const auto& minas = tablero.getTableroMinas();
+    std::string minasMsg = "MINAS ";
+    for (int f = 0; f < tablero.obtenerFilas(); ++f) {
+        for (int c = 0; c < tablero.obtenerColumnas(); ++c) {
+            minasMsg += minas[f][c] ? '1' : '0';
+        }
+    }
+    minasMsg += "\n";
+    send(socketCliente, minasMsg.c_str(), minasMsg.size(), 0);
 
     // Control de turnos: true = anfitrión, false = cliente
     bool turnoAnfitrion = true;
@@ -91,48 +101,120 @@ void ServidorMultijugador::ejecutarJuego(){
                 char tipo;
                 sscanf(buffer, "MOVE %d %d %c", &fila, &columna, &tipo);
 
-                if (tipo == 'D') {
-                    jugadorCliente.realizarMovimiento(fila, columna);
-                } else if (tipo == 'F') {
+                if (tipo == 'F' || tipo == 'f') {
                     jugadorCliente.alternarBanderas(fila, columna);
+                    std::cout << "El rival ha colocado una bandera\n";
+                    std::string notif = "NOTIF El rival ha colocado una bandera\n";
+                    send(socketCliente, notif.c_str(), notif.size(), 0);
+                    // NO alternar turno ni enviar TURN
+                } else if (tipo == 'D' || tipo == 'd') {
+                    // Validar que la celda NO tenga bandera antes de destapar
+                    char visible = jugadorCliente.obtenerTablero().obtenerTableroVisible()[fila][columna];
+                    if (visible == 'B') {
+                        std::string notif = "NOTIF No puedes destapar una celda con bandera\n";
+                        send(socketCliente, notif.c_str(), notif.size(), 0);
+                        // NO alternar turno ni hacer nada
+                        continue;
+                    }
+                    bool esBomba = jugadorCliente.obtenerTablero().getTableroMinas()[fila][columna];
+                    jugadorCliente.realizarMovimiento(fila, columna);
+                    jugadorAnfitrion.realizarMovimiento(fila, columna);
+                    if (esBomba) {
+                        std::string loseMsg = "LOSE Has perdido. Has destapado una bomba.\n";
+                        send(socketCliente, loseMsg.c_str(), loseMsg.size(), 0);
+                        std::cout << "¡Has ganado! El rival destapó una bomba.\n";
+                        juegoTerminado = true;
+                    } else {
+                        // Ya no se envía el tablero, solo alternar turno y enviar TURN
+                        if (!juegoTerminado) {
+                            turnoAnfitrion = true;
+                            std::string turnMsg = "TURN\n";
+                            send(socketCliente, turnMsg.c_str(), turnMsg.size(), 0);
+                        }
+                    }
                 }
-                // Enviar actualización del tablero del cliente al anfitrión
-                enviarTablero(socketCliente, jugadorCliente.obtenerTablero());
-                turnoAnfitrion = true;
             }
         }
     });
 
     // Juego principal por turnos
-    while (jugadorAnfitrion.estaVivo() && jugadorCliente.estaVivo() && !jugadorAnfitrion.haGanado() && !jugadorCliente.haGanado()) {
+    // --- NUEVO: Entrada conjunta y recuadro ---
+    #include "../include/UtilsExtra.hpp"
+    int baseX = 8, baseY = 2;
+    int cellW = 5;
+    int ancho = tablero.obtenerColumnas() * cellW + 1;
+    while (!juegoTerminado && jugadorAnfitrion.estaVivo() && jugadorCliente.estaVivo() && !jugadorAnfitrion.haGanado() && !jugadorCliente.haGanado()) {
+        int filaEntrada = baseY + 6 + tablero.obtenerFilas() * 2;
         if (turnoAnfitrion) {
-            // Turno del anfitrión
             jugadorAnfitrion.obtenerTablero().imprimirTablero();
-
-            int fila = obtenerEntrada("Fila: ", 0, tablero.obtenerFilas() - 1);
-            int columna = obtenerEntrada("Columna: ", 0, tablero.obtenerColumnas() - 1);
-
-            char accion;
-            std::cout << "[D]estapar o [B]andera? ";
-            std::cin >> accion;
-
-            std::string movimientoMsg;
+            std::string entrada;
+            int fila = -1, columna = -1;
+            char accion = ' ';
+            bool entradaValida = false;
+            do {
+                limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Ingrese fila columna accion (D/B): ");
+                std::getline(std::cin >> std::ws, entrada);
+                std::istringstream iss(entrada);
+                if (!(iss >> fila >> columna >> accion)) {
+                    limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                    imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Entrada inválida. Intente: fila columna D/B");
+                    continue;
+                }
+                if (fila < 0 || fila >= tablero.obtenerFilas() || columna < 0 || columna >= tablero.obtenerColumnas() || !(accion == 'D' || accion == 'd' || accion == 'B' || accion == 'b')) {
+                    limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                    imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Entrada inválida. Intente: fila columna D/B");
+                    continue;
+                }
+                entradaValida = true;
+            } while (!entradaValida);
+            limpiarZonaEntrada(baseX, filaEntrada, ancho);
             if (accion == 'B' || accion == 'b') {
                 jugadorAnfitrion.alternarBanderas(fila, columna);
-                movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " F\n";
+                jugadorAnfitrion.obtenerTablero().imprimirTablero();
+                std::string notif = "NOTIF El rival ha colocado una bandera\n";
+                send(socketCliente, notif.c_str(), notif.size(), 0);
+                // NO alternar turno ni enviar TURN
             } else {
+                // Validar que la celda NO tenga bandera antes de destapar
+                char visible = jugadorAnfitrion.obtenerTablero().obtenerTableroVisible()[fila][columna];
+                if (visible == 'B') {
+                    std::string notif = "NOTIF No puedes destapar una celda con bandera\n";
+                    send(socketCliente, notif.c_str(), notif.size(), 0);
+                    // NO alternar turno ni hacer nada
+                    continue;
+                }
+                bool esBomba = tablero.getTableroMinas()[fila][columna];
                 jugadorAnfitrion.realizarMovimiento(fila, columna);
-                movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " D\n";
+                jugadorAnfitrion.obtenerTablero().imprimirTablero();
+                jugadorCliente.realizarMovimiento(fila, columna);
+                if (esBomba) {
+                    std::string loseMsg = "LOSE Has perdido. Has destapado una bomba.\n";
+                    send(socketCliente, loseMsg.c_str(), loseMsg.size(), 0);
+                    std::cout << "¡Has perdido! Has destapado una bomba.\n";
+                    juegoTerminado = true;
+                } else {
+                    // Ya no se envía el tablero, solo alternar turno y enviar TURN
+                    if (!juegoTerminado) {
+                        turnoAnfitrion = false;
+                        limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                        imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Esperando el movimiento del rival.....");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                        std::string turnMsg = "TURN\n";
+                        send(socketCliente, turnMsg.c_str(), turnMsg.size(), 0);
+                    }
+                }
             }
-
-            // Enviar movimiento al cliente
-            send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
-            // Enviar tablero actualizado del anfitrión al cliente
-            enviarTablero(socketCliente, jugadorAnfitrion.obtenerTablero());
-            turnoAnfitrion = false;
         } else {
-            // Esperar a que el cliente juegue (el hilo de recepción lo gestiona)
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            static bool esperandoTurno = false;
+            if (!esperandoTurno) {
+                jugadorAnfitrion.obtenerTablero().imprimirTablero();
+                limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Esperando el movimiento del rival.....");
+                esperandoTurno = true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
         }
     }
 
@@ -146,6 +228,12 @@ void ServidorMultijugador::ejecutarJuego(){
     } else {
         resultado = "EMPATE";
     }
+
+    // Mostrar mensaje de fin de juego localmente (usar variables ya declaradas)
+    limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+    imprimirRecuadroEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho, resultado);
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+    limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
 
     std::string finMsg = "FIN " + resultado + "\n";
     send(socketCliente, finMsg.c_str(), finMsg.size(), 0);

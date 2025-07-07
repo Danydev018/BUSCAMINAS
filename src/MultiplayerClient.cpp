@@ -5,6 +5,8 @@
 #include <iostream>
 #include <thread>
 #include "Utils.hpp"
+#include "UtilsExtra.hpp"
+#include <sstream>
 
 void recibirActualizaciones(int socket, Jugador& jugador);
 
@@ -31,54 +33,128 @@ bool ClienteMultijugador::conectar() {
     return true;
 }
 
+// Variable global para sincronizar el turno
+static bool miTurno = false;
+
+// Función auxiliar para mostrar todas las minas y banderas negras
+void mostrarBombasYBanderas(TableroJuego& tablero) {
+    auto& minas = tablero.getTableroMinas();
+    auto& visible = tablero.obtenerTableroVisible();
+    int filas = tablero.obtenerFilas();
+    int columnas = tablero.obtenerColumnas();
+    for (int f = 0; f < filas; ++f) {
+        for (int c = 0; c < columnas; ++c) {
+            if (minas[f][c]) {
+                // Si ya hay bandera, poner bandera negra, si no, mostrar bomba
+                if (visible[f][c] == 'B') {
+                    visible[f][c] = 'X'; // Bandera negra
+                } else {
+                    visible[f][c] = '*'; // Bomba
+                }
+            }
+        }
+    }
+    tablero.imprimirTablero();
+}
+
 void recibirActualizaciones(int socket,Jugador& jugador){
     char buffer[1024];
     while(true){
         ssize_t bytesRecibidos = recv(socket, buffer, sizeof(buffer)-1, 0);
-        if(bytesRecibidos <= 0) break;
+        if(bytesRecibidos <= 0) {
+            std::cerr << "\nConexión perdida con el servidor.\n";
+            exit(1);
+        }
 
         buffer[bytesRecibidos] = '\0';
-
-        std::string mensaje(buffer);
-
-        if(mensaje.find("CONFIG") == 0){
-            int filas, columnas, minas;
-            
-            sscanf(buffer, "CONFIG %d %d %d", &filas, &columnas, &minas);
-
-            jugador.iniciarJuego(TableroJuego::PERSONALIZADO, filas, columnas, minas);
-        }
-        else if(mensaje.find("FIN") == 0){
-            std::cout << "\n" << mensaje.substr(4) << "\n";
-            break;
-        }
-        else if(mensaje.find("MOVE ") == 0){
-            int fila, columna;
-            char tipo;
-            sscanf(buffer, "MOVE %d %d %c", &fila, &columna, &tipo);
-            
-            if(tipo == 'D') {
-                jugador.realizarMovimiento(fila, columna);
-            }else if(tipo == 'F'){
-                jugador.alternarBanderas(fila, columna);
+        std::string mensajes(buffer);
+        size_t pos = 0;
+        while (pos < mensajes.size()) {
+            // Buscar el siguiente salto de línea para separar mensajes
+            size_t next = mensajes.find('\n', pos);
+            std::string mensaje = (next != std::string::npos) ? mensajes.substr(pos, next - pos) : mensajes.substr(pos);
+            if (mensaje.empty()) {
+                pos = (next == std::string::npos) ? mensajes.size() : next + 1;
+                continue;
             }
-        }
-        else{
-            //Actualización comleta del tablero
-            TableroJuego& tablero = jugador.obtenerTablero();
-            int filas = tablero.obtenerFilas();
-            int columnas = tablero.obtenerColumnas();
-            int index = 0;
-
-            for(int f = 0; f < tablero.obtenerFilas(); f++){
-                for(int c = 0; c < tablero.obtenerColumnas(); c++){
-                   if(index < mensaje.size()){
-                       tablero.obtenerTableroVisible()[f][c] = mensaje[index++];
-                   }
+            if(mensaje.find("CONFIG") == 0){
+                int filas, columnas, minas;
+                sscanf(mensaje.c_str(), "CONFIG %d %d %d", &filas, &columnas, &minas);
+                jugador.iniciarJuego(TableroJuego::PERSONALIZADO, filas, columnas, minas);
+            }
+            else if(mensaje.find("MINAS ") == 0){
+                std::string minasStr = mensaje.substr(6);
+                TableroJuego& tablero = jugador.obtenerTablero();
+                int filas = tablero.obtenerFilas();
+                int columnas = tablero.obtenerColumnas();
+                std::vector<std::vector<bool>> minas(filas, std::vector<bool>(columnas, false));
+                int idx = 0;
+                for(int f=0; f<filas; ++f){
+                    for(int c=0; c<columnas; ++c){
+                        if(idx < minasStr.size())
+                            minas[f][c] = (minasStr[idx++] == '1');
+                    }
                 }
-                if(index < mensaje.size() && mensaje[index] == '\n') index++;
+                tablero.setTableroMinas(minas);
             }
-            tablero.imprimirTablero();
+            else if(mensaje.find("TURN") == 0) {
+                miTurno = true;
+            }
+            else if(mensaje.find("FIN") == 0){
+                int baseX = 8, baseY = 2;
+                int cellW = 5;
+                TableroJuego& tablero = jugador.obtenerTablero();
+                int ancho = tablero.obtenerColumnas() * cellW + 1;
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+                imprimirRecuadroEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho, mensaje.substr(4));
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+                exit(0);
+            }
+            else if(mensaje.find("NOTIF") == 0) {
+                TableroJuego& tablero = jugador.obtenerTablero();
+                tablero.imprimirTablero();
+                int baseX = 8, baseY = 2;
+                int cellW = 5;
+                int ancho = tablero.obtenerColumnas() * cellW + 1;
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+                imprimirRecuadroEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho, mensaje.substr(6));
+            }
+            else if(mensaje.find("LOSE") == 0) {
+                TableroJuego& tablero = jugador.obtenerTablero();
+                mostrarBombasYBanderas(tablero);
+                int baseX = 8, baseY = 2;
+                int cellW = 5;
+                int ancho = tablero.obtenerColumnas() * cellW + 1;
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+                imprimirRecuadroEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho, mensaje.substr(5));
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+            }
+            else if(mensaje.find("MOVE ") == 0){
+                int fila, columna;
+                char tipo;
+                sscanf(mensaje.c_str(), "MOVE %d %d %c", &fila, &columna, &tipo);
+                if(tipo == 'D') {
+                    jugador.realizarMovimiento(fila, columna);
+                }else if(tipo == 'F'){
+                    jugador.alternarBanderas(fila, columna);
+                }
+                jugador.obtenerTablero().imprimirTablero();
+            }
+            else if(mensaje.find("GANADOR") == 0 || mensaje.find("EMPATE") == 0) {
+                int baseX = 8, baseY = 2;
+                int cellW = 5;
+                TableroJuego& tablero = jugador.obtenerTablero();
+                int ancho = tablero.obtenerColumnas() * cellW + 1;
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+                imprimirRecuadroEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho, mensaje);
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+                limpiarZonaEntrada(baseX, baseY+6+tablero.obtenerFilas()*2, ancho);
+                exit(0);
+            }
+            // Ignorar cualquier mensaje que no sea de control o movimiento
+            pos = (next == std::string::npos) ? mensajes.size() : next + 1;
         }
     }
 }
@@ -87,35 +163,69 @@ void ClienteMultijugador::jugar(){
     // Hilo para recibir actualizaciones
     std::thread hiloRecibir(recibirActualizaciones, socketCliente, std::ref(jugador));
 
-    // Control de turnos: el cliente solo puede jugar cuando no es el turno del anfitrión
-    bool miTurno = false;
+    int baseX = 8, baseY = 2;
+    int cellW = 5;
+    bool esperandoTurno = false;
     while (jugador.estaVivo() && !jugador.haGanado()) {
-        // Esperar a que sea el turno del cliente (el servidor controla los turnos)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        // El cliente puede jugar cuando el tablero se actualiza (por mensaje del servidor)
-        // Para simplificar, permitimos que el cliente juegue siempre que esté vivo y no haya ganado
-        jugador.obtenerTablero().imprimirTablero();
-
-        int fila = obtenerEntrada("Fila: ", 0, jugador.obtenerTablero().obtenerFilas() - 1);
-        int columna = obtenerEntrada("Columna: ", 0, jugador.obtenerTablero().obtenerColumnas() - 1);
-
-        char accion;
-        std::cout << "[D]estapar o [B]andera? ";
-        std::cin >> accion;
-
+        TableroJuego& tablero = jugador.obtenerTablero();
+        int ancho = tablero.obtenerColumnas() * cellW + 1;
+        int filaEntrada = baseY + 6 + tablero.obtenerFilas() * 2;
+        if (!miTurno) {
+            if (!esperandoTurno) {
+                tablero.imprimirTablero();
+                limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Esperando el movimiento del rival.....");
+                esperandoTurno = true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
+        }
+        esperandoTurno = false;
+        tablero.imprimirTablero();
+        std::string entrada;
+        int fila = -1, columna = -1;
+        char accion = ' ';
+        bool entradaValida = false;
+        do {
+            limpiarZonaEntrada(baseX, filaEntrada, ancho);
+            imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Ingrese fila columna accion (D/B): ");
+            std::getline(std::cin >> std::ws, entrada);
+            std::istringstream iss(entrada);
+            if (!(iss >> fila >> columna >> accion)) {
+                limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Entrada inválida. Intente: fila columna D/B");
+                continue;
+            }
+            if (fila < 0 || fila >= tablero.obtenerFilas() || columna < 0 || columna >= tablero.obtenerColumnas() || !(accion == 'D' || accion == 'd' || accion == 'B' || accion == 'b')) {
+                limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "Entrada inválida. Intente: fila columna D/B");
+                continue;
+            }
+            entradaValida = true;
+        } while (!entradaValida);
+        limpiarZonaEntrada(baseX, filaEntrada, ancho);
         std::string movimientoMsg;
         if (accion == 'B' || accion == 'b') {
             jugador.alternarBanderas(fila, columna);
+            tablero.imprimirTablero();
             movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " F\n";
+            send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
+            miTurno = false;
         } else {
+            // Validar que la celda NO tenga bandera antes de enviar el movimiento
+            if (tablero.obtenerTableroVisible()[fila][columna] == 'B') {
+                limpiarZonaEntrada(baseX, filaEntrada, ancho);
+                imprimirRecuadroEntrada(baseX, filaEntrada, ancho, "No puedes destapar una celda con bandera");
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                continue;
+            }
             jugador.realizarMovimiento(fila, columna);
+            tablero.imprimirTablero();
             movimientoMsg = "MOVE " + std::to_string(fila) + " " + std::to_string(columna) + " D\n";
+            send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
+            miTurno = false;
         }
-
-        // Enviar movimiento al servidor
-        send(socketCliente, movimientoMsg.c_str(), movimientoMsg.size(), 0);
     }
-
     hiloRecibir.join();
     close(socketCliente);
 }

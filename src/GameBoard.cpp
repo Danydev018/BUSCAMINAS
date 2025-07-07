@@ -1,4 +1,16 @@
 #include "../include/GameBoard.hpp"
+#include <vector>
+// Permite inicializar el tablero de minas desde una matriz externa (para multijugador)
+void TableroJuego::setTableroMinas(const std::vector<std::vector<bool>>& minasExternas) {
+    tableroMinas = minasExternas;
+    calcularMinasAdyacentes();
+}
+
+// Permite obtener la matriz de minas (para enviar al cliente)
+const std::vector<std::vector<bool>>& TableroJuego::getTableroMinas() const {
+    return tableroMinas;
+}
+#include "../include/GameBoard.hpp"
 #include "../include/Utils.hpp"
 #include <iostream>
 #include <cstdlib>
