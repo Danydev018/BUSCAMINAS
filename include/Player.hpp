@@ -1,4 +1,4 @@
- #ifndef PLAYER_HPP
+#ifndef PLAYER_HPP
  #define PLAYER_HPP
 
 #include <string>
@@ -26,6 +26,10 @@ class Jugador{
     TableroJuego& obtenerTablero();
     const TableroJuego& obtenerTablero() const;
     
+    // Inicializa el tablero con los parámetros dados (usado en multijugador)
+    void inicializarTablero(int filas, int columnas, int minas);
+    // Inicializa el tablero con una matriz de minas (sin aleatoriedad)
+    void inicializarTableroConMinas(int filas, int columnas, const std::vector<std::vector<bool>>& minas);
 };
 
 #endif

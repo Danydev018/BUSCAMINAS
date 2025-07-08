@@ -1,4 +1,20 @@
 #include "../include/Player.hpp"
+#include "../include/GameBoard.hpp"
+
+// Inicializa el tablero con los parámetros dados (usado en multijugador)
+void Jugador::inicializarTablero(int filas, int columnas, int minas) {
+    tablero = TableroJuego(TableroJuego::PERSONALIZADO, filas, columnas, minas);
+    tablero.inicializar();
+    vivo = true;
+}
+
+// Inicializa el tablero con una matriz de minas (sin aleatoriedad)
+void Jugador::inicializarTableroConMinas(int filas, int columnas, const std::vector<std::vector<bool>>& minas) {
+    tablero = TableroJuego(TableroJuego::PERSONALIZADO, filas, columnas, 0);
+    tablero.setTableroMinas(minas);
+    tablero.inicializar();
+    vivo = true;
+}
 
 Jugador::Jugador(const std::string& nombre) : nombre(nombre), vivo(true) , tablero(TableroJuego::PRINCIPIANTE)/* inicializar con dificultad por defecto */{}
 
